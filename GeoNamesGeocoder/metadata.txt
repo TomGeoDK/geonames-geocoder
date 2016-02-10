@@ -1,0 +1,39 @@
+# This file contains metadata for your plugin. Since 
+# version 2.0 of QGIS this is the proper way to supply 
+# information about a plugin. The old method of 
+# embedding metadata in __init__.py will 
+# is no longer supported since version 2.0.
+
+# This file should be included when you package your plugin.# Mandatory items:
+
+[general]
+name=GeoNames Geocoder
+qgisMinimumVersion=2.0
+description=Geo-coding of places, based on a local copy of the GeoNames database
+version=0.1
+author=Thomas Becker (Aarhus Univiersity)
+email=thob@envs.au.dk
+
+about=The plugin will use a locale version of some of the name and zip data, provided by Geonames to geo-code features, based on their name or ZIP code. The user will have to have a local version of the Geonames data, since I don't want to put load on the server of the Geonames project. Also does the input file for the search has to provide certain attributes: - country code, and either - location name, or - zip code If both, location name, and zip code are provided, then the plugin will incremental try to find the geo-location. Step one will use the name, while step two will use the zip code for those features that have not been geocoded until then.
+
+tracker=https://github.com/TomGeoDK/geonames-geocoder.git
+repository=https://github.com/TomGeoDK/geonames-geocoder.git
+# End of mandatory metadata
+
+# Recommended items:
+
+# Uncomment the following line and add your changelog:
+# changelog=
+
+# Tags are comma separated with spaces allowed
+tags=
+
+homepage=https://github.com/TomGeoDK/geonames-geocoder.git
+category=Database
+icon=icon.png
+# experimental flag
+experimental=True
+
+# deprecated flag (applies to the whole plugin, not just a single version)
+deprecated=False
+
