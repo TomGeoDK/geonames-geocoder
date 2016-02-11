@@ -21,7 +21,7 @@
  ***************************************************************************/
 """
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
-from PyQt4.QtGui import QAction, QIcon
+from PyQt4.QtGui import QAction, QIcon, QFileDialog
 # Initialize Qt resources from file resources.py
 import resources
 # Import the code for the dialog
@@ -67,6 +67,11 @@ class GeoNamesGeocoder:
         # TODO: We are going to let the user set this up in a future iteration
         self.toolbar = self.iface.addToolBar(u'GeoNamesGeocoder')
         self.toolbar.setObjectName(u'GeoNamesGeocoder')
+        # invoke the select_output_file function
+        self.dlg.ledt_csv.clear()
+        self.dlg.btn_csv.clicked.connect(self.select_output_file)
+        # invoke the get_field_names function
+        self.dlg.cmb_lay.currentIndexChanged.connect(self.get_field_names)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -167,7 +172,6 @@ class GeoNamesGeocoder:
             callback=self.run,
             parent=self.iface.mainWindow())
 
-
     def unload(self):
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
@@ -178,6 +182,28 @@ class GeoNamesGeocoder:
         # remove the toolbar
         del self.toolbar
 
+    def get_field_names(self):
+        """Retrieves the field names of the selected combobox item."""
+        fields_list = []
+        layers = []
+        for layer in self.iface.legendInterface().layers():
+            layers.append(layer)
+        selected_layer_index = self.dlg.cmb_lay.currentIndex()
+        selected_layer = layers[selected_layer_index]
+        for field in selected_layer.pendingFields():
+            fields_list.append(field.name())
+
+        self.dlg.cmb_cntr.clear()
+        self.dlg.cmb_cntr.addItems(fields_list)
+        self.dlg.cmb_place.clear()
+        self.dlg.cmb_place.addItems(fields_list)
+        self.dlg.cmb_zip.clear()
+        self.dlg.cmb_zip.addItems(fields_list)
+
+    def select_output_file(self):
+        """Provides a file dialog to specify location and filename for the output file."""
+        filename = QFileDialog.getSaveFileName(self.dlg, 'Select output file ', '', self.tr('CSV Files (*.csv)'))
+        self.dlg.ledt_csv.setText(filename)
 
     def run(self):
         """Run method that performs all the real work"""
@@ -188,15 +214,16 @@ class GeoNamesGeocoder:
             if not table.hasGeometryType():
                 tables_list.append(table.name())
 
+        self.dlg.cmb_geo.clear()
         self.dlg.cmb_geo.addItems(tables_list)
-        # list layers to select input for geo-coding
-        layers = self.iface.legendInterface().layers()
         layers_list = []
-        for layer in layers:
-            if layer.hasGeometryType():
-                layers_list.append(layer.name())
+        for layer in tables:
+            layers_list.append(layer.name())
 
+        self.dlg.cmb_lay.clear()
         self.dlg.cmb_lay.addItems(layers_list)
+        # list field names of initial table
+        self.get_field_names()
         # show the dialog
         self.dlg.show()
         # Run the dialog event loop
