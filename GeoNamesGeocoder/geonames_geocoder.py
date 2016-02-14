@@ -21,7 +21,9 @@
  ***************************************************************************/
 """
 from PyQt4.QtCore import QSettings, QTranslator, qVersion, QCoreApplication
-from PyQt4.QtGui import QAction, QIcon, QFileDialog
+from PyQt4.QtGui import QAction, QIcon, QFileDialog, QMessageBox, QApplication
+import db_manager.db_plugins.postgis.connector as pg_con
+from qgis.core import QgsDataSourceURI
 # Initialize Qt resources from file resources.py
 import resources
 # Import the code for the dialog
@@ -60,7 +62,7 @@ class GeoNamesGeocoder:
 
         # Create the dialog (after translation) and keep reference
         self.dlg = GeoNamesGeocoderDialog()
-
+        
         # Declare instance attributes
         self.actions = []
         self.menu = self.tr(u'&GeoNames Geocoder')
@@ -72,6 +74,10 @@ class GeoNamesGeocoder:
         self.dlg.btn_csv.clicked.connect(self.select_output_file)
         # invoke the get_field_names function
         self.dlg.cmb_lay.currentIndexChanged.connect(self.get_field_names)
+        # invoke the get_connection function
+        self.dlg.cmb_db.currentIndexChanged.connect(self.get_connections)
+        # invoke the get_db_tables function
+        self.dlg.cmb_con.currentIndexChanged.connect(self.get_db_tables)
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -184,21 +190,74 @@ class GeoNamesGeocoder:
 
     def get_field_names(self):
         """Retrieves the field names of the selected combobox item."""
-        fields_list = []
         layers = []
         for layer in self.iface.legendInterface().layers():
             layers.append(layer)
-        selected_layer_index = self.dlg.cmb_lay.currentIndex()
-        selected_layer = layers[selected_layer_index]
-        for field in selected_layer.pendingFields():
-            fields_list.append(field.name())
+        try:
+            selected_layer_index = self.dlg.cmb_lay.currentIndex()
+            selected_layer = layers[selected_layer_index]
+            fields_list = []
+            for field in selected_layer.pendingFields():
+                fields_list.append(field.name())
+            
+            self.dlg.cmb_cntr.clear()
+            self.dlg.cmb_cntr.addItems(fields_list)
+            self.dlg.cmb_place.clear()
+            self.dlg.cmb_place.addItems(fields_list)
+            self.dlg.cmb_zip.clear()
+            self.dlg.cmb_zip.addItems(fields_list)
+        except IndexError:
+            QMessageBox.critical(None,
+                                 'Layer and Tables:',
+                                 """It seems like you have no layers or tables loaded.\n
+Close the dialog, load at least the information to geo-code, and start again.\n\n
+If that is not the case then get in contact with the developer.""")
 
-        self.dlg.cmb_cntr.clear()
-        self.dlg.cmb_cntr.addItems(fields_list)
-        self.dlg.cmb_place.clear()
-        self.dlg.cmb_place.addItems(fields_list)
-        self.dlg.cmb_zip.clear()
-        self.dlg.cmb_zip.addItems(fields_list)
+    def get_connections(self):
+        """Get the db connections, based on the selection in the database field"""
+        qs = QSettings()
+        con_list = []
+        selected_db_name = self.dlg.cmb_db.currentText()
+        if not selected_db_name == '':
+            for k in qs.allKeys():
+                qsk = k.split('/')
+                if qsk[0] == selected_db_name and qsk[2] not in con_list and qsk[2] is not 'selected':
+                    con_list.append(qsk[2])
+
+        if len(con_list) > 0:
+            con_list.remove('selected')
+        self.dlg.cmb_con.clear()
+        self.dlg.cmb_con.addItems(con_list)
+
+    def get_db_tables(self):
+        """Retrieve all tables from the selected database."""
+        self.dlg.cmb_geo.clear()
+        db_name = self.dlg.cmb_db.currentText()
+        con_name = self.dlg.cmb_con.currentText()
+        con_str = "{db}/connections/{con}/".format(db=db_name, con=con_name)
+        qs = QSettings()
+        db_host = qs.value(con_str + "host")
+        db_port = qs.value(con_str + "port")
+        db_name = qs.value(con_str + "database")
+        con_usr = qs.value(con_str + "username")
+        con_pwd = qs.value(con_str + "password")
+        uri = QgsDataSourceURI()
+        uri.setConnection(db_host, db_port, db_name, con_usr, con_pwd)
+        post_c = pg_con.PostGisDBConnector(uri)
+        tbl_list = []
+        for table in post_c.getTables():
+            if table[3] or table[1] == 'spatial_ref_sys':
+                pass
+            else:
+                tbl_list.append(table[1])
+        if len(tbl_list) == 0:
+            QMessageBox.warning(None,
+                                'Layer and Tables',
+                                """There are no tables to geo-code in this database.""")
+        else:
+            self.dlg.cmb_geo.addItems(tbl_list)
+
+
 
     def select_output_file(self):
         """Provides a file dialog to specify location and filename for the output file."""
@@ -207,15 +266,21 @@ class GeoNamesGeocoder:
 
     def run(self):
         """Run method that performs all the real work"""
+        # get all available Databases and their connections.
+        db_default = ['PostgreSQL', 'SpatialLite']
+        db_con_dict = {}
+        qs = QSettings()
+        for k in qs.allKeys():
+            qsk = k.split('/')
+            if qsk[0] in db_default and qsk[0] not in db_con_dict.keys():
+                db_con_dict.update({qsk[0]: qsk[2]})
+
+        self.dlg.cmb_db.clear()
+        self.dlg.cmb_db.addItems(db_con_dict.keys())
+        self.get_connections()
+        self.get_db_tables()
         # list tables to select geonames
         tables = self.iface.legendInterface().layers()
-        tables_list = []
-        for table in tables:
-            if not table.hasGeometryType():
-                tables_list.append(table.name())
-
-        self.dlg.cmb_geo.clear()
-        self.dlg.cmb_geo.addItems(tables_list)
         layers_list = []
         for layer in tables:
             layers_list.append(layer.name())
